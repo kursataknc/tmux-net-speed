@@ -33,7 +33,8 @@ get_velocity()
     local THOUSAND=1024
     local MILLION=1048576
 
-    local vel=$(( new_value - old_value ))
+    local interval=$(get_tmux_option 'status-interval' 5)
+    local vel=$(( ( new_value - old_value ) / interval ))
     local vel_kb=$(( vel / THOUSAND ))
     local vel_mb=$(( vel / MILLION ))
 
