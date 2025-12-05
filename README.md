@@ -1,6 +1,8 @@
 # tmux-net-speed
 Tmux plugin to monitor upload and download speed of one or all interfaces.
 
+Supports **Linux** and **macOS**.
+
 ## Usage
 Add one of the following format string to `status-right` tmux option.
 
@@ -23,8 +25,9 @@ read and write to this directory.
 
 Set the following options in your `.tmux.conf`.
 
-To change which interfaces to pull from, use a space-separated list. If not set,
-grabs all the interfaces listed in "/sys/class/net/"
+To change which interfaces to pull from, use a space-separated list. If not set:
+- On **Linux**: grabs all the interfaces listed in "/sys/class/net/"
+- On **macOS**: grabs real network interfaces (en0, en1, etc), skipping virtual ones
 
 ```
 set -g @net_speed_interfaces "eth0 eth1"
@@ -71,10 +74,8 @@ This plugin stores the total output for all the interfaces in a file in `/tmp/`.
 
 ### TODO
 - Add unit tests
-- Add error handling
-- Configure which interfaces to calculate
+- Configure which interfaces to calculate on macOS
 - Configure format string for `#{net_speed}`
-- Handle other OSs (currently only supports Linux)
 
 ### License
 
