@@ -54,15 +54,16 @@ read_file()
     local path="$1"
     local fallback_val=0
 
-    # File exists and is readdable?
+    # File exists and is readable?
     if [[ ! -f "$path" ]] ; then
+        # File doesn't exist, initialize it for next run
+        write_file "$path" "$fallback_val" 2>/dev/null
         echo $fallback_val
         return 1
     elif [[ ! -r "$path" ]]; then
         echo $fallback_val
         return 1
     fi
-
 
     # Does the file have content?
     tmp=$(< "$path")
@@ -75,14 +76,32 @@ read_file()
     echo $tmp
 }
 
-# Update values in file
+# Update values in file (atomic write to prevent corruption)
 write_file()
 {
     local path="$1"
     local val="$2"
+    local tmp_path="${path}.tmp.$$"
+    local tmp_dir=$(dirname "$path")
 
-    # TODO Add error checking
-    echo "$val" > "$path"
+    # Check if tmp directory is writable
+    if [[ ! -w "$tmp_dir" ]]; then
+        echo "[tmux-net-speed] Error: Cannot write to $tmp_dir" >&2
+        return 1
+    fi
+
+    # Write to temporary file first
+    echo "$val" > "$tmp_path" 2>/dev/null || {
+        echo "[tmux-net-speed] Error: Failed to write to $tmp_path" >&2
+        return 1
+    }
+    
+    # Atomically move to final location
+    mv "$tmp_path" "$path" 2>/dev/null || {
+        rm -f "$tmp_path" 2>/dev/null
+        echo "[tmux-net-speed] Error: Failed to move $tmp_path to $path" >&2
+        return 1
+    }
 }
 
 get_interfaces()
@@ -102,6 +121,41 @@ get_interfaces()
 sum_speed()
 {
     local column=$1
+
+    if is_osx ; then
+        # On macOS, use netstat instead of /proc/net/dev
+        # Only read from active interfaces (those with actual traffic)
+        # We need to extract only the Link line for each interface to avoid duplicates
+        # Skip loopback and virtual interfaces
+        # Column 7 = Ibytes (received), Column 10 = Obytes (sent)
+        
+        local map_column=$column
+        if [[ $column == "1" ]]; then
+            map_column=7  # Ibytes for download
+        elif [[ $column == "9" ]]; then
+            map_column=10  # Obytes for upload
+        fi
+        
+        local val=0
+        netstat -ibn 2>/dev/null | awk -v col="$map_column" '
+            /<Link#/ {
+                # Extract interface name
+                intf = $1
+                
+                # Only count real network interfaces (en0, en1, etc)
+                if (intf ~ /^en[0-9]+$/ || intf ~ /^en[0-9]+\./) {
+                    bytes = $col
+                    if (bytes ~ /^[0-9]+$/) {
+                        val += bytes
+                    }
+                }
+            }
+            END {
+                print val
+            }
+        '
+        return 0
+    fi
 
     declare -a interfaces=$(get_interfaces)
 
